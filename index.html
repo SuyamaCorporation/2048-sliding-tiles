@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2048 スライディング タイル</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+.tile { transition: all 0.12s ease; }
+.tile-pop { animation: pop 0.18s ease; }
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+</style>
+</head>
+<body class="bg-amber-100 min-h-screen flex flex-col items-center p-4">
+<div class="w-full max-w-sm">
+  <div class="flex justify-between items-start mb-3">
+    <div>
+      <h1 class="text-3xl font-extrabold text-amber-800">2048</h1>
+      <p class="text-xs text-amber-600">タイルを合体させて 2048 を目指せ！</p>
+    </div>
+    <div class="flex gap-2">
+      <div class="bg-amber-700 text-white rounded-xl px-3 py-2 text-center min-w-16">
+        <div class="text-xs">スコア</div>
+        <div id="scoreDisp" class="font-bold text-lg">0</div>
+      </div>
+      <div class="bg-amber-600 text-white rounded-xl px-3 py-2 text-center min-w-16">
+        <div class="text-xs">ベスト</div>
+        <div id="bestDisp" class="font-bold text-lg">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex justify-between mb-3">
+    <button onclick="newGame()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-xl transition text-sm" aria-label="新しいゲームを始める">新しいゲーム</button>
+    <div class="text-xs text-amber-700 self-center">← → ↑ ↓ キーで操作</div>
+  </div>
+
+  <!-- Board -->
+  <div class="bg-amber-700 rounded-2xl p-2.5 shadow-xl mb-3">
+    <div id="board" class="grid grid-cols-4 gap-2" style="aspect-ratio:1/1"></div>
+  </div>
+
+  <!-- Status -->
+  <div id="statusMsg" class="hidden text-center text-xl font-bold py-3 rounded-xl mb-3"></div>
+
+  <div class="text-xs text-amber-600 text-center">スワイプ操作も対応しています</div>
+</div>
+
+<script>
+const COLORS = {
+  0:    { bg: "rgba(205,193,180,0.35)", text: "transparent" },
+  2:    { bg: "#eee4da", text: "#776e65" },
+  4:    { bg: "#ede0c8", text: "#776e65" },
+  8:    { bg: "#f2b179", text: "#f9f6f2" },
+  16:   { bg: "#f59563", text: "#f9f6f2" },
+  32:   { bg: "#f67c5f", text: "#f9f6f2" },
+  64:   { bg: "#f65e3b", text: "#f9f6f2" },
+  128:  { bg: "#edcf72", text: "#f9f6f2" },
+  256:  { bg: "#edcc61", text: "#f9f6f2" },
+  512:  { bg: "#aad048", text: "#f9f6f2" },
+  1024: { bg: "#5cb85c", text: "#f9f6f2" },
+  2048: { bg: "#14b8a6", text: "#f9f6f2" },
+};
+
+let board, score, won, gameOver;
+
+function newGame() {
+  board = Array.from({length:4}, () => new Array(4).fill(0));
+  score = 0;
+  won = false;
+  gameOver = false;
+  addTile(); addTile();
+  updateScore();
+  render();
+  document.getElementById("statusMsg").classList.add("hidden");
+}
+
+function addTile() {
+  const empties = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (board[r][c] === 0) empties.push([r,c]);
+  if (empties.length === 0) return;
+  const [r,c] = empties[Math.floor(Math.random() * empties.length)];
+  board[r][c] = Math.random() < 0.9 ? 2 : 4;
+}
+
+function slide(row) {
+  let arr = row.filter(v => v !== 0);
+  let pts = 0;
+  for (let i = 0; i < arr.length - 1; i++) {
+    if (arr[i] === arr[i+1]) {
+      arr[i] *= 2;
+      pts += arr[i];
+      arr.splice(i+1, 1);
+    }
+  }
+  while (arr.length < 4) arr.push(0);
+  return { row: arr, pts };
+}
+
+function move(dir) {
+  if (gameOver) return;
+  let moved = false;
+  let addedScore = 0;
+
+  const oldBoard = board.map(r => [...r]);
+
+  if (dir === "left") {
+    for (let r = 0; r < 4; r++) {
+      const { row, pts } = slide(board[r]);
+      board[r] = row; addedScore += pts;
+    }
+  } else if (dir === "right") {
+    for (let r = 0; r < 4; r++) {
+      const { row, pts } = slide([...board[r]].reverse());
+      board[r] = row.reverse(); addedScore += pts;
+    }
+  } else if (dir === "up") {
+    for (let c = 0; c < 4; c++) {
+      const col = board.map(r => r[c]);
+      const { row, pts } = slide(col);
+      row.forEach((v, r) => board[r][c] = v); addedScore += pts;
+    }
+  } else if (dir === "down") {
+    for (let c = 0; c < 4; c++) {
+      const col = board.map(r => r[c]).reverse();
+      const { row, pts } = slide(col);
+      row.reverse().forEach((v, r) => board[r][c] = v); addedScore += pts;
+    }
+  }
+
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    if (board[r][c] !== oldBoard[r][c]) moved = true;
+  }
+
+  if (moved) {
+    score += addedScore;
+    addTile();
+    updateScore();
+    render();
+    checkEnd();
+  }
+}
+
+function checkEnd() {
+  // Check win
+  if (!won) {
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+      if (board[r][c] === 2048) {
+        won = true;
+        showStatus("🎉 2048達成！おめでとう！", "bg-teal-500 text-white");
+        return;
+      }
+    }
+  }
+
+  // Check game over
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    if (board[r][c] === 0) return;
+    if (c < 3 && board[r][c] === board[r][c+1]) return;
+    if (r < 3 && board[r][c] === board[r+1][c]) return;
+  }
+  gameOver = true;
+  showStatus("ゲームオーバー 😢 もう一度！", "bg-red-500 text-white");
+}
+
+function showStatus(msg, cls) {
+  const el = document.getElementById("statusMsg");
+  el.textContent = msg;
+  el.className = `text-center text-xl font-bold py-3 rounded-xl mb-3 ${cls}`;
+  el.classList.remove("hidden");
+}
+
+function updateScore() {
+  document.getElementById("scoreDisp").textContent = score;
+  const best = Math.max(score, parseInt(localStorage.getItem("2048_best") || "0"));
+  localStorage.setItem("2048_best", best);
+  document.getElementById("bestDisp").textContent = best;
+}
+
+function render() {
+  const boardEl = document.getElementById("board");
+  boardEl.innerHTML = "";
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const v = board[r][c];
+      const color = COLORS[v] || { bg: "#3d3a36", text: "#f9f6f2" };
+      const fontSize = v >= 1024 ? "text-lg" : v >= 128 ? "text-xl" : "text-2xl";
+      const div = document.createElement("div");
+      div.className = `tile flex items-center justify-center rounded-xl font-extrabold ${fontSize} aspect-square`;
+      div.style.backgroundColor = color.bg;
+      div.style.color = color.text;
+      div.textContent = v || "";
+      if (v > 0) div.setAttribute("aria-label", `タイル ${v}`);
+      boardEl.appendChild(div);
+    }
+  }
+}
+
+// Keyboard
+document.addEventListener("keydown", e => {
+  const map = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
+  if (map[e.key]) { e.preventDefault(); move(map[e.key]); }
+});
+
+// Touch/swipe
+let touchStart = null;
+document.addEventListener("touchstart", e => {
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+document.addEventListener("touchend", e => {
+  if (!touchStart) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+  if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? "right" : "left");
+  else move(dy > 0 ? "down" : "up");
+  touchStart = null;
+}, { passive: true });
+
+newGame();
+</script>
+</body>
+</html>
